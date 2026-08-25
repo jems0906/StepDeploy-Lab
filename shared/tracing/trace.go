@@ -95,7 +95,15 @@ func persist() error {
 // GenerateTraceID creates a new unique trace ID
 func GenerateTraceID() string {
 	b := make([]byte, 16)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		// Fallback keeps IDs unique enough for local diagnostics if CSPRNG fails.
+		ns := uint64(time.Now().UnixNano())
+		pid := uint64(os.Getpid())
+		for i := 0; i < 8; i++ {
+			b[i] = byte(ns >> (8 * i))
+			b[8+i] = byte(pid >> (8 * i))
+		}
+	}
 	return hex.EncodeToString(b)
 }
 
