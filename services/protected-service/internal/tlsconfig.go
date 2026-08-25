@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/example/stepdeploy-lab/shared/certs"
 )
@@ -49,21 +50,29 @@ func loadTrustedRoot() (*x509.CertPool, error) {
 	if caURL == "" {
 		caURL = "http://localhost:8002"
 	}
-	resp, err := http.Get(strings.TrimRight(caURL, "/") + "/certs/root")
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch CA root: %w", err)
+	rootURL := strings.TrimRight(caURL, "/") + "/certs/root"
+	client := &http.Client{Timeout: 5 * time.Second}
+	var lastErr error
+	for attempt := 1; attempt <= 10; attempt++ {
+		resp, err := client.Get(rootURL)
+		if err == nil {
+			rootPEM, readErr := ioutil.ReadAll(resp.Body)
+			resp.Body.Close()
+			if resp.StatusCode == http.StatusOK && readErr == nil {
+				pool := x509.NewCertPool()
+				if pool.AppendCertsFromPEM(rootPEM) {
+					return pool, nil
+				}
+				lastErr = fmt.Errorf("failed to parse CA root certificate")
+			} else if readErr != nil {
+				lastErr = fmt.Errorf("failed to read CA root: %w", readErr)
+			} else {
+				lastErr = fmt.Errorf("CA root request returned status %d", resp.StatusCode)
+			}
+		} else {
+			lastErr = fmt.Errorf("failed to fetch CA root: %w", err)
+		}
+		time.Sleep(time.Second)
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("CA root request returned status %d", resp.StatusCode)
-	}
-	rootPEM, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read CA root: %w", err)
-	}
-	pool := x509.NewCertPool()
-	if !pool.AppendCertsFromPEM(rootPEM) {
-		return nil, fmt.Errorf("failed to parse CA root certificate")
-	}
-	return pool, nil
+	return nil, fmt.Errorf("CA root unavailable after retries: %w", lastErr)
 }
