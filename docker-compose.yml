@@ -1,0 +1,107 @@
+version: '3.8'
+
+services:
+  idp-mock:
+    build:
+      context: .
+      dockerfile: services/idp-mock/Dockerfile
+    ports:
+      - "8001:8001"
+    environment:
+      - PORT=8001
+      - LOG_LEVEL=info
+    networks:
+      - stepdeploy
+
+  ca-service:
+    build:
+      context: .
+      dockerfile: services/ca-service/Dockerfile
+    ports:
+      - "8002:8002"
+    environment:
+      - PORT=8002
+      - IDP_URL=http://idp-mock:8001
+      - LOG_LEVEL=info
+    depends_on:
+      - idp-mock
+    networks:
+      - stepdeploy
+
+  enrollment-agent:
+    build:
+      context: .
+      dockerfile: services/enrollment-agent/Dockerfile
+    ports:
+      - "8003:8003"
+    environment:
+      - PORT=8003
+      - IDP_URL=http://idp-mock:8001
+      - CA_URL=http://ca-service:8002
+      - PROTECTED_SERVICE_URL=https://protected-service:8004
+      - DIAGNOSTICS_URL=http://diagnostics-api:8080
+      - LOG_LEVEL=info
+    depends_on:
+      - idp-mock
+      - ca-service
+    networks:
+      - stepdeploy
+
+  protected-service:
+    build:
+      context: .
+      dockerfile: services/protected-service/Dockerfile
+    ports:
+      - "8004:8004"
+    environment:
+      - PORT=8004
+      - CA_URL=http://ca-service:8002
+      - LOG_LEVEL=info
+    depends_on:
+      - ca-service
+    networks:
+      - stepdeploy
+
+  diagnostics-api:
+    build:
+      context: .
+      dockerfile: services/diagnostics-api/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - IDP_URL=http://idp-mock:8001
+      - CA_URL=http://ca-service:8002
+      - ENROLLMENT_AGENT_URL=http://enrollment-agent:8003
+      - PROTECTED_SERVICE_URL=https://protected-service:8004
+      - TRACE_STORE_PATH=/app/data/traces.json
+      - INCIDENT_STORE_PATH=/app/data/incidents.json
+      - LOG_LEVEL=info
+    volumes:
+      - diagnostics-data:/app/data
+    depends_on:
+      - idp-mock
+      - ca-service
+      - protected-service
+    networks:
+      - stepdeploy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://diagnostics-api:8080
+    depends_on:
+      - diagnostics-api
+    networks:
+      - stepdeploy
+
+networks:
+  stepdeploy:
+    driver: bridge
+
+volumes:
+  diagnostics-data:

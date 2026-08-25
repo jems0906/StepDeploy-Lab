@@ -1,0 +1,14 @@
+FROM golang:1.22-alpine AS build
+WORKDIR /app
+COPY . .
+WORKDIR /app/services/enrollment-agent
+ENV GOPROXY=https://goproxy.cn,direct
+RUN go mod download
+RUN CGO_ENABLED=0 go build -o /app/enrollment-agent ./cmd
+
+FROM alpine:3.19
+RUN apk add --no-cache ca-certificates
+WORKDIR /app
+COPY --from=build /app/enrollment-agent .
+EXPOSE 8003
+CMD ["./enrollment-agent"]

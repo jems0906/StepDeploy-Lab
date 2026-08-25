@@ -1,0 +1,23 @@
+{
+  "services": [
+    {
+      "name": "diagnostics-api",
+      "build": {
+        "builder": "DOCKERFILE",
+        "dockerfilePath": "services/diagnostics-api/Dockerfile",
+        "dockerContext": "."
+      },
+      "deploy": {
+        "startCommand": "/app/diagnostics-api"
+      }
+    },
+    {
+      "name": "frontend",
+      "build": {
+        "builder": "DOCKERFILE",
+        "dockerfilePath": "frontend/Dockerfile",
+        "dockerContext": "frontend"
+      }
+    }
+  ]
+}
