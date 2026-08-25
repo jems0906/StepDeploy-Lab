@@ -48,6 +48,7 @@ func load() error {
 	if storePath == "" {
 		return nil
 	}
+	// #nosec G304 -- storePath is configured by trusted service env in this lab.
 	data, err := os.ReadFile(storePath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -80,11 +81,12 @@ func persist() error {
 	}
 
 	if dir := filepath.Dir(storePath); dir != "." {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := os.MkdirAll(dir, 0o750); err != nil {
 			return fmt.Errorf("failed to create trace store directory: %w", err)
 		}
 	}
-	if err := os.WriteFile(storePath, data, 0o644); err != nil {
+	// #nosec G304 -- storePath is configured by trusted service env in this lab.
+	if err := os.WriteFile(storePath, data, 0o600); err != nil {
 		return fmt.Errorf("failed to write trace store: %w", err)
 	}
 	return nil
