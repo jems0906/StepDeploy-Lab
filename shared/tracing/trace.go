@@ -2,6 +2,7 @@ package tracing
 
 import (
 	"crypto/rand"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -99,10 +100,8 @@ func GenerateTraceID() string {
 		// Fallback keeps IDs unique enough for local diagnostics if CSPRNG fails.
 		ns := uint64(time.Now().UnixNano())
 		pid := uint64(os.Getpid())
-		for i := 0; i < 8; i++ {
-			b[i] = byte(ns >> (8 * i))
-			b[8+i] = byte(pid >> (8 * i))
-		}
+		binary.LittleEndian.PutUint64(b[0:8], ns)
+		binary.LittleEndian.PutUint64(b[8:16], pid)
 	}
 	return hex.EncodeToString(b)
 }
