@@ -2,7 +2,7 @@ package tracing
 
 import (
 	"crypto/rand"
-	"encoding/binary"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -98,10 +98,9 @@ func GenerateTraceID() string {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
 		// Fallback keeps IDs unique enough for local diagnostics if CSPRNG fails.
-		ns := uint64(time.Now().UnixNano())
-		pid := uint64(os.Getpid())
-		binary.LittleEndian.PutUint64(b[0:8], ns)
-		binary.LittleEndian.PutUint64(b[8:16], pid)
+		seed := fmt.Sprintf("%d-%d", time.Now().UnixNano(), os.Getpid())
+		sum := sha256.Sum256([]byte(seed))
+		copy(b, sum[:16])
 	}
 	return hex.EncodeToString(b)
 }
@@ -146,7 +145,10 @@ func Store(trace *Trace) {
 	traces[trace.TraceID] = trace
 	tracesMu.Unlock()
 
-	persist() //nolint:errcheck // best-effort; in-memory store remains authoritative
+	if err := persist(); err != nil {
+		// Persistence is best-effort; in-memory store remains authoritative.
+		fmt.Fprintf(os.Stderr, "trace persist warning: %v\n", err)
+	}
 }
 
 // Get retrieves a trace by ID
